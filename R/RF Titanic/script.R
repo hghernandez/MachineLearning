@@ -119,6 +119,10 @@ chisq.test(survived_emb)
 
 titanic <- titanic[,-c(4,7,8,9)]
 
+titanic$Sex <- as.factor(titanic$Sex) #Para que funcione el impute mode
+titanic$Embarked <- as.factor(titanic$Embarked) #Para que funcione el impute mode
+
+
 set.seed(123)
 
 split <- initial_split(titanic,strata = Survived)
@@ -128,7 +132,8 @@ train <- training(split)
 test <- testing(split)
 
 
-
+train %>%
+  glimpse()
 
 #armo la receta
 ## inputo los NA de las variables numericas con el valor de la media
@@ -141,17 +146,18 @@ sapply(titanic, function(x) sum(is.na(x)))
 
 titanic_rec <- recipe(Survived ~ ., data = train) %>%
   update_role(PassengerId, new_role = "ID") %>%
-  step_dummy(all_nominal(), -all_outcomes()) %>% #One hot encoding todas las nominales
-  step_impute_mean(Age,Pclass,EnFamilia)%>% #Imputo los NA con la media de Edad
-  step_impute_mode(Embarked,Sex) #Imputo los Na con la categoria más frecuente
+  step_impute_mean(Age)%>% #Imputo los NA con la media de Edad
+  step_impute_mode(Embarked) %>% #Imputo los Na con la categoria más frecuente
+  step_dummy(all_nominal(), -all_outcomes())#One hot encoding todas las nominales
+
 
 #Aprendo la receta
 
 train_prep <- prep(titanic_rec)
 
-
-rlang::last_error()
-
 juiced <- bake(train_prep,new_data = NULL)
 
 View(juiced)
+
+#Creo y ajusto el primer modelo
+
