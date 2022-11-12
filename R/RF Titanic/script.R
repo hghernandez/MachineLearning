@@ -121,7 +121,7 @@ titanic <- titanic[,-c(4,7,8,9)]
 
 titanic$Sex <- as.factor(titanic$Sex) #Para que funcione el impute mode
 titanic$Embarked <- as.factor(titanic$Embarked) #Para que funcione el impute mode
-
+titanic$EnFamilia <- as.factor(titanic$EnFamilia)
 
 set.seed(123)
 
@@ -159,5 +159,154 @@ juiced <- bake(train_prep,new_data = NULL)
 
 View(juiced)
 
+
 #Creo y ajusto el primer modelo
+
+tune_spec <- rand_forest(
+  mtry = tune(),
+  trees = 1000,
+  min_n = tune()
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger")
+
+##%######################################################%##
+#                                                          #
+####                 Creamos un worflow                 ####
+#                                                          #
+##%######################################################%##
+
+tune_titanic_wf <- workflow() %>%
+  add_recipe(titanic_rec)%>%
+  add_model(tune_spec)
+
+##%######################################################%##
+#                                                          #
+####                Ajustamos el modelo                 ####
+####         y optimizamos los hiperparametros          ####
+#                                                          #
+##%######################################################%##
+
+##%######################################################%##
+#                                                          #
+####            Optimizacion hiperparámetros            ####
+#                                                          #
+##%######################################################%##
+
+# Validacion cruzada ----
+
+set.seed(234)
+
+trees_folds <- vfold_cv(train)
+
+# Entrenamos varios modelos ----
+
+doParallel::registerDoParallel()
+
+set.seed(345)
+
+tune_res <- tune_grid(
+  tune_titanic_wf,
+  resamples = trees_folds,
+  grid = 10
+)
+
+
+tune_res %>%
+  collect_metrics() %>%
+  filter(.metric== "roc_auc")%>%
+  select(mtry,min_n,mean) %>%
+  pivot_longer(-mean) %>%
+  ggplot(aes(x= value, y= mean))+
+  geom_line()+
+  facet_wrap(.~name,scales = "free_x")
+
+## Probamos varias combinaciones de hipeparametros
+
+rf_grid <- grid_regular(
+  mtry(range = c(1, 6)),
+  min_n(range = c(2, 10)),
+  levels = 5
+)
+
+rf_grid
+
+##Reajustamos el modelo
+
+set.seed(456)
+
+tune_res_reg <- tune_grid(
+  tune_titanic_wf,
+  resamples = trees_folds,
+  grid = rf_grid
+)
+
+# Vemos las métricas 
+
+tune_res_reg %>%
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  mutate(min_n = factor(min_n)) %>%
+  ggplot(aes(mtry, mean, color = min_n)) +
+  geom_line(alpha = 0.5, size = 1.5) +
+  geom_point() +
+  labs(y = "AUC")
+
+View(tune_res_reg %>%
+       collect_metrics())
+
+best_parameter <- tune_res_reg %>%
+  select_best(metric = "roc_auc")
+
+final_rf <- finalize_model(
+  tune_spec,
+  best_parameter
+)
+
+final_rf
+
+
+
+
+#Ajustamos el modelo final
+
+##Armamos el workflow
+
+
+titanic_final <- workflow() %>%
+  add_recipe(titanic_rec)%>%
+  add_model(final_rf)
+
+
+#Ajustamos el modelo
+
+
+
+titanic_final_fit <- titanic_final %>%
+  last_fit(split)
+
+titanic_final_fit %>%
+  collect_metrics()
+
+#Unimos la prediccion con el archivo original
+
+
+View(titanic_final_fit %>%
+  collect_predictions() %>%
+  mutate(correcto= case_when(Survived == .pred_class ~ 1,
+                             TRUE ~ 0)) %>%
+  select(-Survived)%>%
+  bind_cols(test))
+
+#Vemos las variables según la importancia
+
+library(vip)
+
+final_rf %>%
+  set_engine("ranger", importance = "permutation") %>%
+  fit(Survived ~ .,
+      data = juice(train_prep) %>% select(-PassengerId)
+  ) %>%
+  vip(geom = "point")
+
 
