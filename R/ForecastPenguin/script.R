@@ -23,6 +23,8 @@ test[[libros]] <- testing(split_data)
 
 }
 
+
+
 #Instancio el modelo
 
 lm_spec <- linear_reg() %>%
@@ -62,6 +64,20 @@ result_test[[libros]] <- lm_fit[[libros]] %>%
 
 result_test_df <- do.call(rbind,result_test)
 
-result_test_df  %>%
+View(result_test_df  %>%
   group_by(model,TITLE) %>%
-  rmse(truth = truth, estimate = .pred)
+  rmse(truth = truth, estimate = .pred))
+
+
+
+#Realizo las proyecciones para el mes 37
+
+max(data$Fecha)
+
+pred = data.frame("Fecha" = as.Date('2021-02-01'),
+                  "Time" = 37)
+
+View(data[data$TITLE== 'Libro 1',])
+
+lm_fit$`Libro 1` %>%
+  predict(new_data = pred)
