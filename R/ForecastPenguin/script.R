@@ -79,5 +79,9 @@ pred = data.frame("Fecha" = as.Date('2021-02-01'),
 
 View(data[data$TITLE== 'Libro 1',])
 
-lm_fit$`Libro 1` %>%
+lm_fit$`Libro 3` %>%
   predict(new_data = pred)
+
+View(data %>%
+       mutate(libro_num= as.numeric(stringr::str_extract_all(TITLE,"(\\d)+")))%>%
+       arrange(desc(libro_num)))
